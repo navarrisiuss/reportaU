@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+# Rust
+target/
+Cargo.lock
+# Gateway
+gateway/node_modules/
+gateway/dist/
