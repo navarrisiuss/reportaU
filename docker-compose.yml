@@ -1,3 +1,5 @@
+name: reportau
+
 services:
   gateway:
     build: ./gateway
@@ -11,7 +13,7 @@ services:
       - AUDITORIA_URL=http://auditoria:8002
     depends_on:
       reportes:
-        condition: service_started
+        condition: service_healthy
       auditoria:
         condition: service_started
     networks:
@@ -31,9 +33,27 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       backend_net:
         ipv4_address: 172.21.0.11
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    hostname: frontend
+    ports:
+      - "8090:80"
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      frontend_net:
+        ipv4_address: 172.20.0.20
 
   auditoria:
     build: ./auditoria
