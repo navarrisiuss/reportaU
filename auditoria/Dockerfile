@@ -1,7 +1,7 @@
 # Etapa 1: Compilación
 FROM rust:1.90-slim-bookworm AS builder
 WORKDIR /app
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock* ./
 # Crear un main.rs dummy para cachear la compilación de dependencias
 RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
 # Copiar el código real y compilar el binario

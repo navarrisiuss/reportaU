@@ -12,7 +12,7 @@ Un reporte entra por el **gateway** (TypeScript), se guarda en **PostgreSQL** a 
 | `frontend` | Interfaz web | React + Vite, servido por nginx | 80 | **8090** | frontend_net (172.20.0.20) |
 | `gateway` | Módulo A: ingesta y orquestación | Node.js 20 + TypeScript + Express | 3000 | **8080** | frontend_net (172.20.0.10), backend_net (172.21.0.10) |
 | `reportes` | Módulo B: servicio de dominio | Python 3.12 + FastAPI + SQLAlchemy | 8001 | — | backend_net (172.21.0.11) |
-| `auditoria` | Módulo C: auditoría (en desarrollo) | Rust + driver MongoDB | 8002 | — | backend_net (172.21.0.12) |
+| `auditoria` | Módulo C: servicio de auditoría | Rust + Axum + driver MongoDB | 8002 | — | backend_net (172.21.0.12) |
 | `postgres` | BD 1 (relacional) | PostgreSQL 16 | 5432 | — | backend_net (172.21.0.20) |
 | `mongo` | BD 2 (documental) | MongoDB 7 | 27017 | — | backend_net (172.21.0.21) |
 
@@ -116,18 +116,11 @@ docker compose exec gateway wget -qO- http://auditoria:8002/health
 docker network inspect reportau_backend_net
 ```
 
-## Módulo de auditoría (pendiente)
+## Módulo de auditoría
 
-`auditoria/src/main.rs` aún está vacío, así que por ahora **el contenedor `auditoria` no compila**. Mientras tanto se puede levantar el resto del sistema sin él:
+Implementado en Rust con Axum y el driver oficial de MongoDB (`auditoria/src/main.rs`).
 
-```bash
-docker compose up -d --build postgres mongo reportes
-docker compose up -d --build --no-deps gateway frontend
-```
-
-En ese modo los reportes se guardan igual en PostgreSQL, y el gateway responde `"auditoria": "PENDIENTE"`.
-
-Lo que el gateway espera del servicio (variables disponibles: `MONGO_URI=mongodb://mongo:27017`, `MONGO_DB=reportau_audit`):
+Variables de entorno configurables (`MONGO_URI=mongodb://mongo:27017`, `MONGO_DB=reportau_audit`, `PORT=8002`, `NODO_NOMBRE=auditoria`):
 
 - Escuchar en `0.0.0.0:8002`.
 - `GET /health` → `200` si MongoDB responde.

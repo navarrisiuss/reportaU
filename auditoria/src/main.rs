@@ -1,196 +1,243 @@
+//! Módulo C: Servicio de Auditoría (Rust + Axum + MongoDB).
+//! Registra trazas de auditoría inmutables con hash SHA-256 en MongoDB.
+
+use std::env;
+use std::sync::Arc;
+use std::time::Instant;
+
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use chrono::Utc;
-use mongodb::{bson::doc, Client};
-use serde::Serialize;
-use std::{env, sync::Arc, time::Duration};
-use tokio::net::{lookup_host, TcpListener, TcpStream};
-use tokio::time::timeout;
+use futures_util::TryStreamExt;
+use mongodb::{
+    bson::{doc, oid::ObjectId},
+    options::{ClientOptions, FindOptions},
+    Client, Database,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sha2::{Digest, Sha256};
+
 
 #[derive(Clone)]
 struct AppState {
-    mongo_client: Option<Client>,
-    mongo_db_name: String,
+    db: Database,
+    nodo: String,
 }
 
-#[derive(Serialize)]
-struct ContainerCheck {
-    target: String,
-    dns_resolved: bool,
-    tcp_connected: bool,
-    details: String,
-    status: String,
+#[derive(Debug, Deserialize)]
+struct NuevoEventoReq {
+    reporte_id: String,
+    #[serde(default = "default_operacion")]
+    operacion: String,
+    payload: serde_json::Value,
+    #[serde(default)]
+    ip_origen: String,
+    #[serde(default = "default_nodo_origen")]
+    nodo_origen: String,
+    recibido_en: Option<String>,
 }
 
-#[derive(Serialize)]
-struct HealthResponse {
-    status: String,
-    service: String,
-    timestamp: String,
-    database: DatabaseStatus,
-    containers_connectivity: Vec<ContainerCheck>,
-    note: String,
+fn default_operacion() -> String {
+    "CREAR_REPORTE".to_string()
 }
 
-#[derive(Serialize)]
-struct DatabaseStatus {
-    configured_uri: String,
-    database_name: String,
-    connected: bool,
-    details: String,
+fn default_nodo_origen() -> String {
+    "gateway".to_string()
+}
+
+#[derive(Debug, Serialize)]
+struct EventoCreadoResp {
+    evento_id: String,
+    hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct EventoAuditoria {
+    evento_id: String,
+    reporte_id: String,
+    operacion: String,
+    payload: serde_json::Value,
+    hash: String,
+    ip_origen: String,
+    nodo_origen: String,
+    nodo_auditor: String,
+    recibido_en: Option<String>,
+    registrado_en: String,
+    duracion_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct EventosQuery {
+    reporte_id: Option<String>,
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = env::var("PORT").unwrap_or_else(|_| "8002".to_string());
-    let bind_addr = format!("0.0.0.0:{}", port);
-
     let mongo_uri = env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://mongo:27017".to_string());
-    let mongo_db_name = env::var("MONGO_DB").unwrap_or_else(|_| "reportau_audit".to_string());
+    let mongo_db = env::var("MONGO_DB").unwrap_or_else(|_| "reportau_audit".to_string());
+    let nodo = env::var("NODO_NOMBRE")
+        .or_else(|_| env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "auditoria".to_string());
 
-    println!("Iniciando servicio de Auditoria...");
-    println!("Configuracion: MONGO_URI={}, MONGO_DB={}", mongo_uri, mongo_db_name);
-
-    // intentar inicar cliente de mongo
-    let mongo_client = match Client::with_uri_str(&mongo_uri).await {
-        Ok(client) => {
-            println!("Cliente MongoDB configurado correctamente.");
-            Some(client)
-        }
-        Err(err) => {
-            eprintln!("Aviso: No se pudo crear el cliente MongoDB ({}), reintentara en /health", err);
-            None
-        }
-    };
+    println!("[auditoria] conectando a MongoDB en {} (bd: {})...", mongo_uri, mongo_db);
+    let client_options = ClientOptions::parse(&mongo_uri).await?;
+    let client = Client::with_options(client_options)?;
+    let db = client.database(&mongo_db);
 
     let state = Arc::new(AppState {
-        mongo_client,
-        mongo_db_name,
+        db,
+        nodo: nodo.clone(),
     });
 
     let app = Router::new()
-        .route("/", get(root_handler))
-        .route("/health", get(health_handler))
+        .route("/health", get(health))
+        .route("/eventos", post(crear_evento).get(listar_eventos))
         .with_state(state);
 
-    let listener = TcpListener::bind(&bind_addr)
-        .await
-        .unwrap_or_else(|e| panic!("Error al enlazar en {}: {}", bind_addr, e));
+    let addr = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    println!("[auditoria] escuchando en {} (nodo: {})", addr, nodo);
 
-    println!("Servidor Auditoria escuchando en http://{}", bind_addr);
+    axum::serve(listener, app).await?;
 
-    axum::serve(listener, app)
-        .await
-        .unwrap_or_else(|e| panic!("Error en el servidor Axum: {}", e));
+    Ok(())
 }
 
-async fn root_handler() -> impl IntoResponse {
-    Json(serde_json::json!({
-        "service": "auditoria",
-        "description": "Modulo de Auditoria de ReportaU",
-        "endpoints": ["/health"]
-    }))
-}
-
-async fn check_target_reachability(host: &str, port: u16, is_implemented: bool) -> ContainerCheck {
-    let target = format!("{}:{}", host, port);
-
-    // Probar resolucion DNS dentro de la red Docker
-    let dns_resolved = lookup_host(&target).await.is_ok();
-
-    if !dns_resolved {
-        return ContainerCheck {
-            target,
-            dns_resolved: false,
-            tcp_connected: false,
-            details: "No resuelve DNS (el contenedor no esta en la red o aun no existe)".to_string(),
-            status: if is_implemented { "ERROR".to_string() } else { "PENDIENTE (Compañero)".to_string() },
-        };
+async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.db.run_command(doc! { "ping": 1 }, None).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({
+                "status": "ok",
+                "servicio": "auditoria",
+                "bd": "mongodb",
+                "nodo": state.nodo,
+            })),
+        ),
+        Err(err) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "status": "error",
+                "servicio": "auditoria",
+                "error": format!("MongoDB no disponible: {}", err),
+            })),
+        ),
     }
+}
 
-    // Probar conexion TCP con 1 segundo de timeout
-    let tcp_result = timeout(Duration::from_millis(1000), TcpStream::connect(&target)).await;
+async fn crear_evento(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<NuevoEventoReq>,
+) -> Result<(StatusCode, Json<EventoCreadoResp>), (StatusCode, Json<serde_json::Value>)> {
+    let start_instant = Instant::now();
+    let registrado_dt = Utc::now();
 
-    match tcp_result {
-        Ok(Ok(_stream)) => ContainerCheck {
-            target,
-            dns_resolved: true,
-            tcp_connected: true,
-            details: "Conexion TCP exitosa al contenedor por nombre".to_string(),
-            status: "OK".to_string(),
-        },
-        Ok(Err(err)) => ContainerCheck {
-            target,
-            dns_resolved: true,
-            tcp_connected: false,
-            details: if !is_implemented {
-                format!("DNS resolvio nombre del contenedor, pero puerto cerrado o servicio no iniciado ({}) [Esperado: pendiente por compañero]", err)
+    // 1) Calcular SHA-256 del payload
+    let payload_bytes = serde_json::to_vec(&input.payload).map_err(|err| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "SERIALIZACION", "detalles": err.to_string() })),
+        )
+    })?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&payload_bytes);
+    let hash = format!("sha256:{}", hex::encode(hasher.finalize()));
+
+    let evento_id = ObjectId::new().to_hex();
+
+    // 2) Calcular duración estimada de procesamiento o latencia recibida
+    let duracion_ms = if let Some(ref recibido_str) = input.recibido_en {
+        if let Ok(recibido_dt) = chrono::DateTime::parse_from_rfc3339(recibido_str) {
+            let diff = (registrado_dt - recibido_dt.with_timezone(&Utc)).num_milliseconds();
+            if diff >= 0 {
+                diff
             } else {
-                format!("DNS resolvio nombre, pero error TCP: {}", err)
-            },
-            status: if is_implemented { "ERROR".to_string() } else { "PENDIENTE (Compañero)".to_string() },
-        },
-        Err(_) => ContainerCheck {
-            target,
-            dns_resolved: true,
-            tcp_connected: false,
-            details: "Timeout de conexion TCP (1000ms)".to_string(),
-            status: if is_implemented { "TIMEOUT".to_string() } else { "PENDIENTE (Compañero)".to_string() },
-        },
-    }
+                start_instant.elapsed().as_millis() as i64
+            }
+        } else {
+            start_instant.elapsed().as_millis() as i64
+        }
+    } else {
+        start_instant.elapsed().as_millis() as i64
+    };
+
+    let evento = EventoAuditoria {
+        evento_id: evento_id.clone(),
+        reporte_id: input.reporte_id,
+        operacion: input.operacion,
+        payload: input.payload,
+        hash: hash.clone(),
+        ip_origen: input.ip_origen,
+        nodo_origen: input.nodo_origen,
+        nodo_auditor: state.nodo.clone(),
+        recibido_en: input.recibido_en,
+        registrado_en: registrado_dt.to_rfc3339(),
+        duracion_ms,
+    };
+
+    // 3) Guardar en colección eventos_auditoria de MongoDB
+    let collection = state.db.collection::<EventoAuditoria>("eventos_auditoria");
+    collection.insert_one(evento, None).await.map_err(|err| {
+        eprintln!("[auditoria] error al insertar en MongoDB: {}", err);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "BD_ERROR", "detalles": err.to_string() })),
+        )
+    })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(EventoCreadoResp { evento_id, hash }),
+    ))
 }
 
-async fn health_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    // Verificar mongo
-    let (db_connected, db_details) = match &state.mongo_client {
-        Some(client) => {
-            let db = client.database(&state.mongo_db_name);
-            let ping_result = timeout(
-                Duration::from_millis(1500),
-                db.run_command(doc! { "ping": 1 }, None),
-            )
-            .await;
+async fn listar_eventos(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<EventosQuery>,
+) -> Result<Json<Vec<EventoAuditoria>>, (StatusCode, Json<serde_json::Value>)> {
+    let collection = state.db.collection::<EventoAuditoria>("eventos_auditoria");
 
-            match ping_result {
-                Ok(Ok(_)) => (true, "Ping a MongoDB exitoso".to_string()),
-                Ok(Err(e)) => (false, format!("Error en ping a MongoDB: {}", e)),
-                Err(_) => (false, "Timeout al hacer ping a MongoDB".to_string()),
-            }
+    let filter = if let Some(ref rid) = query.reporte_id {
+        if !rid.trim().is_empty() {
+            doc! { "reporte_id": rid }
+        } else {
+            doc! {}
         }
-        None => (false, "Cliente MongoDB no inicializado".to_string()),
+    } else {
+        doc! {}
     };
 
-    let mongo_uri = env::var("MONGO_URI").unwrap_or_else(|_| "mongodb://mongo:27017".to_string());
+    let find_options = FindOptions::builder()
+        .sort(doc! { "registrado_en": -1 })
+        .limit(100)
+        .build();
 
-    // Verificar alcance de los otros contenedores en backend_net
-    // Nota: 'reportes' y 'gateway' estan marcados con is_implemented = false (temporales hasta juntar codigos)
-    let checks = vec![
-        check_target_reachability("mongo", 27017, true).await,
-        check_target_reachability("postgres", 5432, true).await,
-        check_target_reachability("reportes", 8001, false).await,
-        check_target_reachability("gateway", 3000, false).await,
-    ];
+    let mut cursor = collection.find(filter, find_options).await.map_err(|err| {
+        eprintln!("[auditoria] error al consultar MongoDB: {}", err);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "BD_ERROR", "detalles": err.to_string() })),
+        )
+    })?;
 
-    let overall_status = if db_connected { "OK" } else { "DEGRADED" };
+    let mut eventos = Vec::new();
+    while let Some(ev) = cursor.try_next().await.map_err(|err| {
+        eprintln!("[auditoria] error al leer cursor de MongoDB: {}", err);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "CURSOR_ERROR", "detalles": err.to_string() })),
+        )
+    })? {
+        eventos.push(ev);
+    }
 
-    let response = HealthResponse {
-        status: overall_status.to_string(),
-        service: "auditoria".to_string(),
-        timestamp: Utc::now().to_rfc3339(),
-        database: DatabaseStatus {
-            configured_uri: mongo_uri,
-            database_name: state.mongo_db_name.clone(),
-            connected: db_connected,
-            details: db_details,
-        },
-        containers_connectivity: checks,
-        note: "Las verificaciones hacia 'reportes' y 'gateway' son temporales/tolerantes a fallas mientras no este todo junto.".to_string(),
-    };
-
-    (StatusCode::OK, Json(response))
+    Ok(Json(eventos))
 }
