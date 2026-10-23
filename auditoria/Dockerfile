@@ -1,5 +1,5 @@
 # Etapa 1: Compilación
-FROM rust:1.82-slim AS builder
+FROM rust:1.90-slim-bookworm AS builder
 WORKDIR /app
 COPY Cargo.toml ./
 # Crear un main.rs dummy para cachear la compilación de dependencias

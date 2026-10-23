@@ -39,6 +39,8 @@ services:
     build: ./auditoria
     container_name: auditoria
     hostname: auditoria
+    ports: # temporal para testing
+      - "8002:8002"
     expose:
       - "8002"
     environment:
@@ -98,7 +100,7 @@ networks:
         - subnet: 172.20.0.0/24
   backend_net:
     driver: bridge
-    internal: true
+    # internal: true          # comentado temporalmente para testing
     ipam:
       config:
         - subnet: 172.21.0.0/24
