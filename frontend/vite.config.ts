@@ -8,4 +8,10 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    // En desarrollo (npm run dev) las llamadas /api van al gateway publicado por docker compose.
+    proxy: {
+      '/api': 'http://localhost:8080',
+    },
+  },
 })
