@@ -1,7 +1,18 @@
-import { useEffect, useState, type FormEvent } from 'react'
+﻿import { useEffect, useState, type FormEvent } from 'react'
 import './App.css'
 
 const CATEGORIAS = ['INFRAESTRUCTURA', 'DOCENTE', 'ADMINISTRATIVO', 'SERVICIOS', 'OTRO'] as const
+const ESTADOS = ['RECIBIDO', 'EN_REVISION', 'RESUELTO', 'RECHAZADO'] as const
+
+type Estado = typeof ESTADOS[number]
+
+// Transiciones permitidas (espejo del backend)
+const TRANSICIONES: Record<string, Estado[]> = {
+  RECIBIDO:    ['EN_REVISION', 'RECHAZADO'],
+  EN_REVISION: ['RESUELTO', 'RECHAZADO'],
+  RESUELTO:    [],
+  RECHAZADO:   [],
+}
 
 type Reporte = {
   id: string
@@ -40,8 +51,12 @@ function fecha(iso: string | null) {
   return iso ? new Date(iso).toLocaleString('es-CL') : '—'
 }
 
-async function obtenerReportes(): Promise<Reporte[]> {
-  const res = await fetch('/api/reportes')
+async function obtenerReportes(filtros: { categoria?: string; estado?: string }): Promise<Reporte[]> {
+  const params = new URLSearchParams()
+  if (filtros.categoria) params.set('categoria', filtros.categoria)
+  if (filtros.estado) params.set('estado', filtros.estado)
+  const qs = params.toString() ? `?${params}` : ''
+  const res = await fetch(`/api/reportes${qs}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
@@ -55,10 +70,17 @@ function App() {
   const [abierto, setAbierto] = useState<string | null>(null)
   const [eventos, setEventos] = useState<Record<string, Evento[]>>({})
 
-  async function cargarReportes() {
+  // Filtros activos
+  const [filtroCat, setFiltroCat] = useState('')
+  const [filtroEst, setFiltroEst] = useState('')
+
+  // Estado de cambio de estado por tarjeta
+  const [cambiando, setCambiando] = useState<Record<string, boolean>>({})
+
+  async function cargarReportes(cat = filtroCat, est = filtroEst) {
     setCargando(true)
     try {
-      setReportes(await obtenerReportes())
+      setReportes(await obtenerReportes({ categoria: cat, estado: est }))
     } catch {
       setAviso({ tipo: 'error', texto: 'No se pudo obtener la lista de reportes.' })
     } finally {
@@ -67,10 +89,8 @@ function App() {
   }
 
   useEffect(() => {
-    obtenerReportes()
-      .then(setReportes)
-      .catch(() => setAviso({ tipo: 'error', texto: 'No se pudo obtener la lista de reportes.' }))
-      .finally(() => setCargando(false))
+    cargarReportes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function enviar(e: FormEvent) {
@@ -120,6 +140,35 @@ function App() {
     const res = await fetch(`/api/reportes/${id}/auditoria`)
     const datos: Evento[] = res.ok ? await res.json() : []
     setEventos((prev) => ({ ...prev, [id]: datos }))
+  }
+
+  async function cambiarEstado(id: string, nuevoEstado: string) {
+    setCambiando((prev) => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch(`/api/reportes/${id}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: nuevoEstado }),
+      })
+      if (!res.ok) {
+        const cuerpo = await res.json()
+        setAviso({ tipo: 'error', texto: cuerpo.detail ?? `Error ${res.status}` })
+        return
+      }
+      const actualizado: Reporte = await res.json()
+      setReportes((prev) => prev.map((r) => (r.id === id ? { ...r, estado: actualizado.estado } : r)))
+      setAviso({ tipo: 'ok', texto: `Reporte actualizado a ${actualizado.estado}` })
+    } catch {
+      setAviso({ tipo: 'error', texto: 'No se pudo cambiar el estado del reporte.' })
+    } finally {
+      setCambiando((prev) => ({ ...prev, [id]: false }))
+    }
+  }
+
+  function aplicarFiltros(cat: string, est: string) {
+    setFiltroCat(cat)
+    setFiltroEst(est)
+    cargarReportes(cat, est)
   }
 
   return (
@@ -203,51 +252,107 @@ function App() {
         <section className="panel">
           <div className="titulo-lista">
             <h2>Reportes recientes</h2>
-            <button type="button" className="secundario" onClick={cargarReportes}>
+            <button type="button" className="secundario" onClick={() => cargarReportes()}>
               Actualizar
             </button>
           </div>
+
+          {/* ── Filtros ── */}
+          <div className="filtros">
+            <label>
+              Categoría
+              <select
+                value={filtroCat}
+                onChange={(e) => aplicarFiltros(e.target.value, filtroEst)}
+              >
+                <option value="">Todas</option>
+                {CATEGORIAS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Estado
+              <select
+                value={filtroEst}
+                onChange={(e) => aplicarFiltros(filtroCat, e.target.value)}
+              >
+                <option value="">Todos</option>
+                {ESTADOS.map((e) => (
+                  <option key={e} value={e}>{e}</option>
+                ))}
+              </select>
+            </label>
+            {(filtroCat || filtroEst) && (
+              <button type="button" className="secundario" onClick={() => aplicarFiltros('', '')}>
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+
           {cargando && <p className="vacio">Cargando…</p>}
-          {!cargando && reportes.length === 0 && <p className="vacio">Aún no hay reportes.</p>}
+          {!cargando && reportes.length === 0 && <p className="vacio">No hay reportes con esos filtros.</p>}
           <ul className="lista">
-            {reportes.map((r) => (
-              <li key={r.id} className="tarjeta">
-                <div className="meta">
-                  <span className="etiqueta">{r.categoria}</span>
-                  <span className="estado">{r.estado}</span>
-                </div>
-                <h3>{r.titulo}</h3>
-                <p>{r.descripcion}</p>
-                <p className="detalle">
-                  {r.ubicacion ? `${r.ubicacion} · ` : ''}
-                  {fecha(r.creado_en)} · {r.anonimo ? 'Anónimo' : 'Con autor'}
-                </p>
-                <button type="button" className="secundario" onClick={() => verAuditoria(r.id)}>
-                  {abierto === r.id ? 'Ocultar auditoría' : 'Ver auditoría'}
-                </button>
-                {abierto === r.id && (
-                  <div className="auditoria">
-                    {(eventos[r.id] ?? []).length === 0 && <p>Sin eventos de auditoría registrados.</p>}
-                    {(eventos[r.id] ?? []).map((ev) => (
-                      <dl key={ev.evento_id}>
-                        <dt>Hash</dt>
-                        <dd className="mono">{ev.hash}</dd>
-                        <dt>IP origen</dt>
-                        <dd>{ev.ip_origen}</dd>
-                        <dt>Nodos</dt>
-                        <dd>
-                          {ev.nodo_origen} → {ev.nodo_auditor}
-                        </dd>
-                        <dt>Registrado</dt>
-                        <dd>
-                          {fecha(ev.registrado_en)} ({ev.duracion_ms} ms)
-                        </dd>
-                      </dl>
-                    ))}
+            {reportes.map((r) => {
+              const siguientes = TRANSICIONES[r.estado] ?? []
+              return (
+                <li key={r.id} className="tarjeta">
+                  <div className="meta">
+                    <span className="etiqueta">{r.categoria}</span>
+                    <span className={`estado estado-${r.estado.toLowerCase()}`}>{r.estado.replace('_', ' ')}</span>
                   </div>
-                )}
-              </li>
-            ))}
+                  <h3>{r.titulo}</h3>
+                  <p>{r.descripcion}</p>
+                  <p className="detalle">
+                    {r.ubicacion ? `${r.ubicacion} · ` : ''}
+                    {fecha(r.creado_en)} · {r.anonimo ? 'Anónimo' : 'Con autor'}
+                  </p>
+
+                  {/* ── Cambio de estado ── */}
+                  {siguientes.length > 0 && (
+                    <div className="acciones-estado">
+                      <span className="label-accion">Cambiar estado:</span>
+                      {siguientes.map((sig) => (
+                        <button
+                          key={sig}
+                          type="button"
+                          className={`btn-estado btn-estado-${sig.toLowerCase()}`}
+                          disabled={cambiando[r.id]}
+                          onClick={() => cambiarEstado(r.id, sig)}
+                        >
+                          {cambiando[r.id] ? '…' : sig.replace('_', ' ')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <button type="button" className="secundario" onClick={() => verAuditoria(r.id)}>
+                    {abierto === r.id ? 'Ocultar auditoría' : 'Ver auditoría'}
+                  </button>
+                  {abierto === r.id && (
+                    <div className="auditoria">
+                      {(eventos[r.id] ?? []).length === 0 && <p>Sin eventos de auditoría registrados.</p>}
+                      {(eventos[r.id] ?? []).map((ev) => (
+                        <dl key={ev.evento_id}>
+                          <dt>Hash</dt>
+                          <dd className="mono">{ev.hash}</dd>
+                          <dt>IP origen</dt>
+                          <dd>{ev.ip_origen}</dd>
+                          <dt>Nodos</dt>
+                          <dd>
+                            {ev.nodo_origen} → {ev.nodo_auditor}
+                          </dd>
+                          <dt>Registrado</dt>
+                          <dd>
+                            {fecha(ev.registrado_en)} ({ev.duracion_ms} ms)
+                          </dd>
+                        </dl>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </section>
       </main>

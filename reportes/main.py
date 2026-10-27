@@ -1,4 +1,4 @@
-"""Módulo B: Servicio de Reportes (Python + FastAPI + PostgreSQL)."""
+﻿"""Módulo B: Servicio de Reportes (Python + FastAPI + PostgreSQL)."""
 
 import os
 import uuid
@@ -35,6 +35,15 @@ class Reporte(Base):
 
 
 Categoria = Literal["INFRAESTRUCTURA", "DOCENTE", "ADMINISTRATIVO", "SERVICIOS", "OTRO"]
+Estado = Literal["RECIBIDO", "EN_REVISION", "RESUELTO", "RECHAZADO"]
+
+# Transiciones de estado válidas (RECIBIDO -> EN_REVISION -> RESUELTO/RECHAZADO)
+TRANSICIONES: dict[str, list[str]] = {
+    "RECIBIDO":    ["EN_REVISION", "RECHAZADO"],
+    "EN_REVISION": ["RESUELTO", "RECHAZADO"],
+    "RESUELTO":    [],
+    "RECHAZADO":   [],
+}
 
 
 class NuevoReporte(BaseModel):
@@ -50,6 +59,10 @@ class NuevoReporte(BaseModel):
         if not self.anonimo and not self.autor_correo:
             raise ValueError("autor_correo es obligatorio cuando anonimo es false")
         return self
+
+
+class CambioEstado(BaseModel):
+    estado: Estado
 
 
 class ReporteCreado(BaseModel):
@@ -99,9 +112,18 @@ def crear_reporte(datos: NuevoReporte):
 
 
 @app.get("/reportes", response_model=list[ReporteDetalle])
-def listar_reportes(limite: int = 50):
+def listar_reportes(
+    limite: int = 50,
+    categoria: Optional[str] = None,
+    estado: Optional[str] = None,
+):
     with Session(engine) as session:
-        filas = session.scalars(select(Reporte).order_by(Reporte.creado_en.desc()).limit(limite)).all()
+        stmt = select(Reporte).order_by(Reporte.creado_en.desc()).limit(limite)
+        if categoria:
+            stmt = stmt.where(Reporte.categoria == categoria.upper())
+        if estado:
+            stmt = stmt.where(Reporte.estado == estado.upper())
+        filas = session.scalars(stmt).all()
         return [
             ReporteDetalle(
                 id=r.id,
@@ -115,3 +137,37 @@ def listar_reportes(limite: int = 50):
             )
             for r in filas
         ]
+
+
+@app.patch("/reportes/{reporte_id}/estado", response_model=ReporteDetalle)
+def cambiar_estado(reporte_id: str, datos: CambioEstado):
+    try:
+        rid = uuid.UUID(reporte_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ID de reporte inválido")
+
+    with Session(engine) as session:
+        reporte = session.get(Reporte, rid)
+        if not reporte:
+            raise HTTPException(status_code=404, detail="Reporte no encontrado")
+
+        permitidos = TRANSICIONES.get(reporte.estado, [])
+        if datos.estado not in permitidos:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Transición inválida: {reporte.estado} -> {datos.estado}. Permitidos: {permitidos}",
+            )
+
+        reporte.estado = datos.estado
+        session.commit()
+        session.refresh(reporte)
+        return ReporteDetalle(
+            id=reporte.id,
+            estado=reporte.estado,
+            creado_en=reporte.creado_en,
+            categoria=reporte.categoria,
+            titulo=reporte.titulo,
+            descripcion=reporte.descripcion,
+            ubicacion=reporte.ubicacion,
+            anonimo=reporte.anonimo,
+        )
