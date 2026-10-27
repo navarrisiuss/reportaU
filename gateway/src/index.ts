@@ -139,9 +139,30 @@ app.post("/api/reportes", async (req, res) => {
   res.status(201).json({ ...creado, auditoria, hash });
 });
 
-app.get("/api/reportes", async (_req, res) => {
+app.get("/api/reportes", async (req, res) => {
   try {
-    res.json(await llamar("reportes", `${REPORTES_URL}/reportes`));
+    const params = new URLSearchParams();
+    if (typeof req.query.categoria === "string") params.set("categoria", req.query.categoria);
+    if (typeof req.query.estado === "string") params.set("estado", req.query.estado);
+    const qs = params.toString() ? `?${params}` : "";
+    res.json(await llamar("reportes", `${REPORTES_URL}/reportes${qs}`));
+  } catch (err) {
+    responderError(res, err);
+  }
+});
+
+app.patch("/api/reportes/:id/estado", async (req, res) => {
+  const id = encodeURIComponent(req.params.id);
+  if (!req.body?.estado || typeof req.body.estado !== "string") {
+    res.status(400).json({ error: "VALIDACION", detalles: ["estado es requerido"] });
+    return;
+  }
+  try {
+    const resultado = await llamar("reportes", `${REPORTES_URL}/reportes/${id}/estado`, {
+      method: "PATCH",
+      body: JSON.stringify({ estado: req.body.estado }),
+    });
+    res.json(resultado);
   } catch (err) {
     responderError(res, err);
   }

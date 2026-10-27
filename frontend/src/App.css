@@ -187,8 +187,31 @@ button.secundario {
 }
 
 .estado {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.estado-recibido {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.estado-en_revision {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.estado-resuelto {
   background: var(--ok-bg);
   color: var(--ok);
+}
+
+.estado-rechazado {
+  background: var(--err-bg);
+  color: var(--err);
 }
 
 .detalle {
@@ -227,4 +250,90 @@ button.secundario {
 .mono {
   font-family: var(--mono);
   font-size: 0.78rem;
+}
+
+/* ── Filtros ── */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.filtros select {
+  font-size: 0.85rem;
+  padding: 6px 8px;
+}
+
+/* ── Acciones de cambio de estado ── */
+.acciones-estado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.label-accion {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.btn-estado {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: none;
+  border-radius: 999px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-estado:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.btn-estado-en_revision {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.btn-estado-en_revision:hover:not(:disabled) {
+  background: #fde047;
+}
+
+.btn-estado-resuelto {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.btn-estado-resuelto:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+.btn-estado-rechazado {
+  background: var(--err-bg);
+  color: var(--err);
+}
+
+.btn-estado-rechazado:hover:not(:disabled) {
+  filter: brightness(0.9);
 }
