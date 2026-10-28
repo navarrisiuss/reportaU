@@ -1,4 +1,4 @@
-﻿"""Módulo B: Servicio de Reportes (Python + FastAPI + PostgreSQL)."""
+"""Módulo B: Servicio de Reportes (Python + FastAPI + PostgreSQL)."""
 
 import os
 import uuid
@@ -79,6 +79,14 @@ class ReporteDetalle(ReporteCreado):
     anonimo: bool
 
 
+class PaginaReportes(BaseModel):
+    items: list[ReporteDetalle]
+    total: int
+    pagina: int
+    por_pagina: int
+    paginas: int
+
+
 app = FastAPI(title="ReportaU - Servicio de Reportes")
 
 
@@ -111,32 +119,53 @@ def crear_reporte(datos: NuevoReporte):
         return ReporteCreado(id=reporte.id, estado=reporte.estado, creado_en=reporte.creado_en)
 
 
-@app.get("/reportes", response_model=list[ReporteDetalle])
+@app.get("/reportes", response_model=PaginaReportes)
 def listar_reportes(
-    limite: int = 50,
+    pagina: int = 1,
+    por_pagina: int = 10,
     categoria: Optional[str] = None,
     estado: Optional[str] = None,
 ):
+    from sqlalchemy import func
+
+    pagina = max(1, pagina)
+    por_pagina = min(max(1, por_pagina), 100)
+    offset = (pagina - 1) * por_pagina
+
     with Session(engine) as session:
-        stmt = select(Reporte).order_by(Reporte.creado_en.desc()).limit(limite)
+        base = select(Reporte)
         if categoria:
-            stmt = stmt.where(Reporte.categoria == categoria.upper())
+            base = base.where(Reporte.categoria == categoria.upper())
         if estado:
-            stmt = stmt.where(Reporte.estado == estado.upper())
-        filas = session.scalars(stmt).all()
-        return [
-            ReporteDetalle(
-                id=r.id,
-                estado=r.estado,
-                creado_en=r.creado_en,
-                categoria=r.categoria,
-                titulo=r.titulo,
-                descripcion=r.descripcion,
-                ubicacion=r.ubicacion,
-                anonimo=r.anonimo,
-            )
-            for r in filas
-        ]
+            base = base.where(Reporte.estado == estado.upper())
+
+        total = session.scalar(select(func.count()).select_from(base.subquery()))
+        filas = session.scalars(
+            base.order_by(Reporte.creado_en.desc()).offset(offset).limit(por_pagina)
+        ).all()
+
+        import math
+        paginas = math.ceil(total / por_pagina) if total else 1
+
+        return PaginaReportes(
+            items=[
+                ReporteDetalle(
+                    id=r.id,
+                    estado=r.estado,
+                    creado_en=r.creado_en,
+                    categoria=r.categoria,
+                    titulo=r.titulo,
+                    descripcion=r.descripcion,
+                    ubicacion=r.ubicacion,
+                    anonimo=r.anonimo,
+                )
+                for r in filas
+            ],
+            total=total,
+            pagina=pagina,
+            por_pagina=por_pagina,
+            paginas=paginas,
+        )
 
 
 @app.patch("/reportes/{reporte_id}/estado", response_model=ReporteDetalle)

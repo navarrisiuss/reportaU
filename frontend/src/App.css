@@ -337,3 +337,71 @@ button.secundario {
 .btn-estado-rechazado:hover:not(:disabled) {
   filter: brightness(0.9);
 }
+
+/* ── Badge total ── */
+.badge-total {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+/* ── Paginación ── */
+.paginacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 20px;
+  justify-content: center;
+}
+
+.pag-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pag-btn:hover:not(:disabled) {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pag-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pag-activa {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent) !important;
+}
+
+.pag-sep {
+  color: var(--text);
+  font-size: 0.85rem;
+  padding: 0 2px;
+  line-height: 34px;
+}
+
+.pag-info {
+  font-size: 0.8rem;
+  color: var(--text);
+  margin-left: 6px;
+}

@@ -144,6 +144,8 @@ app.get("/api/reportes", async (req, res) => {
     const params = new URLSearchParams();
     if (typeof req.query.categoria === "string") params.set("categoria", req.query.categoria);
     if (typeof req.query.estado === "string") params.set("estado", req.query.estado);
+    if (typeof req.query.pagina === "string") params.set("pagina", req.query.pagina);
+    if (typeof req.query.por_pagina === "string") params.set("por_pagina", req.query.por_pagina);
     const qs = params.toString() ? `?${params}` : "";
     res.json(await llamar("reportes", `${REPORTES_URL}/reportes${qs}`));
   } catch (err) {
