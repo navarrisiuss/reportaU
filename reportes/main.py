@@ -79,6 +79,10 @@ class ReporteDetalle(ReporteCreado):
     anonimo: bool
 
 
+class ReporteConCambio(ReporteDetalle):
+    estado_anterior: str
+
+
 app = FastAPI(title="ReportaU - Servicio de Reportes")
 
 
@@ -139,7 +143,7 @@ def listar_reportes(
         ]
 
 
-@app.patch("/reportes/{reporte_id}/estado", response_model=ReporteDetalle)
+@app.patch("/reportes/{reporte_id}/estado", response_model=ReporteConCambio)
 def cambiar_estado(reporte_id: str, datos: CambioEstado):
     try:
         rid = uuid.UUID(reporte_id)
@@ -158,12 +162,14 @@ def cambiar_estado(reporte_id: str, datos: CambioEstado):
                 detail=f"Transición inválida: {reporte.estado} -> {datos.estado}. Permitidos: {permitidos}",
             )
 
+        estado_anterior = reporte.estado
         reporte.estado = datos.estado
         session.commit()
         session.refresh(reporte)
-        return ReporteDetalle(
+        return ReporteConCambio(
             id=reporte.id,
             estado=reporte.estado,
+            estado_anterior=estado_anterior,
             creado_en=reporte.creado_en,
             categoria=reporte.categoria,
             titulo=reporte.titulo,

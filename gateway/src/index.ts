@@ -34,7 +34,12 @@ addFormats(ajv);
 const validarReporte = ajv.compile(nuevoReporteSchema);
 
 class ServicioError extends Error {
-  constructor(public servicio: string, public status: number, mensaje: string) {
+  constructor(
+    public servicio: string,
+    public status: number,
+    public cuerpo: unknown,
+    mensaje: string,
+  ) {
     super(mensaje);
   }
 }
@@ -48,11 +53,11 @@ async function llamar(servicio: string, url: string, init?: RequestInit): Promis
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    throw new ServicioError(servicio, 503, (err as Error).message);
+    throw new ServicioError(servicio, 503, null, (err as Error).message);
   }
   const cuerpo = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new ServicioError(servicio, res.status, JSON.stringify(cuerpo));
+    throw new ServicioError(servicio, res.status, cuerpo, JSON.stringify(cuerpo));
   }
   return cuerpo;
 }
@@ -65,6 +70,16 @@ function ipCliente(req: Request): string {
 
 function responderError(res: Response, err: unknown) {
   if (err instanceof ServicioError) {
+    // Los errores de negocio del servicio (4xx) se propagan tal cual:
+    // una transición inválida (422) o un ID inexistente (404) no significan
+    // que el servicio esté caído.
+    if (err.status >= 400 && err.status < 500) {
+      console.error(`[gateway] ${err.servicio} respondió ${err.status}: ${err.message}`);
+      const cuerpo = err.cuerpo && typeof err.cuerpo === "object" ? err.cuerpo : {};
+      res.status(err.status).json({ ...cuerpo, servicio: err.servicio });
+      return;
+    }
+    // Fallo de conexión, timeout o 5xx del servicio: sí está no disponible.
     console.error(`[gateway] fallo en ${err.servicio}: ${err.message}`);
     res.status(503).json({ error: "SERVICIO_NO_DISPONIBLE", servicio: err.servicio });
     return;
@@ -153,19 +168,50 @@ app.get("/api/reportes", async (req, res) => {
 
 app.patch("/api/reportes/:id/estado", async (req, res) => {
   const id = encodeURIComponent(req.params.id);
+  const recibidoEn = new Date().toISOString();
   if (!req.body?.estado || typeof req.body.estado !== "string") {
     res.status(400).json({ error: "VALIDACION", detalles: ["estado es requerido"] });
     return;
   }
+
+  // 1) Módulo B: aplicar la transición de estado en PostgreSQL.
+  let resultado: { id: string; estado: string; estado_anterior?: string };
   try {
-    const resultado = await llamar("reportes", `${REPORTES_URL}/reportes/${id}/estado`, {
+    resultado = await llamar("reportes", `${REPORTES_URL}/reportes/${id}/estado`, {
       method: "PATCH",
       body: JSON.stringify({ estado: req.body.estado }),
     });
-    res.json(resultado);
   } catch (err) {
     responderError(res, err);
+    return;
   }
+
+  // 2) Módulo C: registrar la traza del cambio. Si falla, el cambio ya quedó aplicado.
+  let auditoria: "REGISTRADA" | "PENDIENTE" = "REGISTRADA";
+  let hash: string | undefined;
+  try {
+    const evento = await llamar("auditoria", `${AUDITORIA_URL}/eventos`, {
+      method: "POST",
+      body: JSON.stringify({
+        reporte_id: resultado.id,
+        operacion: "CAMBIAR_ESTADO",
+        payload: {
+          reporte_id: resultado.id,
+          estado_anterior: resultado.estado_anterior ?? null,
+          estado_nuevo: resultado.estado,
+        },
+        ip_origen: ipCliente(req),
+        nodo_origen: NODO,
+        recibido_en: recibidoEn,
+      }),
+    });
+    hash = evento.hash;
+  } catch (err) {
+    auditoria = "PENDIENTE";
+    console.error(`[gateway] auditoría pendiente para ${resultado.id}: ${(err as Error).message}`);
+  }
+
+  res.json({ ...resultado, auditoria, hash });
 });
 
 app.get("/api/reportes/:id/auditoria", async (req, res) => {
