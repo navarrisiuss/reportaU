@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+﻿import { useEffect, useState, type FormEvent } from 'react'
 
 const CATEGORIAS = ['INFRAESTRUCTURA', 'DOCENTE', 'ADMINISTRATIVO', 'SERVICIOS', 'OTRO'] as const
 const ESTADOS = ['RECIBIDO', 'EN_REVISION', 'RESUELTO', 'RECHAZADO'] as const
@@ -60,6 +60,8 @@ function fechaRelativa(iso: string) {
   return `Hace ${days}d`
 }
 
+const PAGE_SIZE = 5
+
 async function obtenerReportes(filtros: { categoria?: string; estado?: string }): Promise<Reporte[]> {
   const params = new URLSearchParams()
   if (filtros.categoria) params.set('categoria', filtros.categoria)
@@ -73,6 +75,10 @@ async function obtenerReportes(filtros: { categoria?: string; estado?: string })
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
 function IconCheck({ cls = 'w-4 h-4' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
@@ -80,6 +86,10 @@ function IconCheck({ cls = 'w-4 h-4' }: { cls?: string }) {
   )
 }
 function IconX({ cls = 'w-4 h-4' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
@@ -87,6 +97,10 @@ function IconX({ cls = 'w-4 h-4' }: { cls?: string }) {
   )
 }
 function IconPin({ cls = 'w-3.5 h-3.5' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -95,6 +109,10 @@ function IconPin({ cls = 'w-3.5 h-3.5' }: { cls?: string }) {
   )
 }
 function IconDoc({ cls = 'w-5 h-5' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -102,6 +120,10 @@ function IconDoc({ cls = 'w-5 h-5' }: { cls?: string }) {
   )
 }
 function IconRefresh({ cls = 'w-4 h-4' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -109,6 +131,10 @@ function IconRefresh({ cls = 'w-4 h-4' }: { cls?: string }) {
   )
 }
 function IconShield({ cls = 'w-3.5 h-3.5' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -116,6 +142,10 @@ function IconShield({ cls = 'w-3.5 h-3.5' }: { cls?: string }) {
   )
 }
 function IconChevron({ cls = 'w-4 h-4', open = false }: { cls?: string; open?: boolean }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={`${cls} transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
@@ -123,6 +153,10 @@ function IconChevron({ cls = 'w-4 h-4', open = false }: { cls?: string; open?: b
   )
 }
 function IconSpin({ cls = 'w-5 h-5' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={`${cls} animate-spin`} fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -131,6 +165,10 @@ function IconSpin({ cls = 'w-5 h-5' }: { cls?: string }) {
   )
 }
 function IconUser({ cls = 'w-3.5 h-3.5' }: { cls?: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -157,6 +195,10 @@ const CATEGORIA_STYLES: Record<string, string> = {
 
 function EstadoBadge({ estado }: { estado: string }) {
   const s = ESTADO_STYLES[estado] ?? ESTADO_STYLES['RECIBIDO']
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ring-1 ${s.badge}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
@@ -167,6 +209,10 @@ function EstadoBadge({ estado }: { estado: string }) {
 
 function EstadoBtn({ estado, disabled, onClick }: { estado: string; disabled: boolean; onClick: () => void }) {
   const s = ESTADO_STYLES[estado] ?? ESTADO_STYLES['RECIBIDO']
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <button
       type="button"
@@ -182,6 +228,10 @@ function EstadoBtn({ estado, disabled, onClick }: { estado: string; disabled: bo
 
 function CategoriaBadge({ cat }: { cat: string }) {
   const s = CATEGORIA_STYLES[cat] ?? CATEGORIA_STYLES['OTRO']
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ring-1 ${s}`}>
       {cat.charAt(0) + cat.slice(1).toLowerCase()}
@@ -192,6 +242,10 @@ function CategoriaBadge({ cat }: { cat: string }) {
 // ─── Stat card ───────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <div className="flex flex-col items-center justify-center gap-0.5 p-3 rounded-xl bg-white dark:bg-gray-800/60 ring-1 ring-gray-200 dark:ring-gray-700 shadow-sm min-w-[72px]">
       <span className={`text-2xl font-black tabular-nums ${color}`}>{value}</span>
@@ -203,6 +257,10 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 // ─── Form input wrapper ───────────────────────────────────────────────────────
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2">
@@ -230,6 +288,7 @@ function App() {
   const [filtroEst, setFiltroEst] = useState('')
   const [cambiando, setCambiando] = useState<Record<string, boolean>>({})
   const [charCount, setCharCount] = useState(0)
+  const [pagina, setPagina] = useState(1)
 
   async function cargarReportes(cat = filtroCat, est = filtroEst) {
     setCargando(true)
@@ -325,7 +384,11 @@ function App() {
   useEffect(() => {
     if (!aviso) return
     const t = setTimeout(() => setAviso(null), 6000)
-    return () => clearTimeout(t)
+    // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
+  return () => clearTimeout(t)
   }, [aviso])
 
   // Stats
@@ -335,6 +398,10 @@ function App() {
     revision: reportes.filter(r => r.estado === 'EN_REVISION').length,
     resuelto: reportes.filter(r => r.estado === 'RESUELTO').length,
   }
+
+  // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 dark:from-gray-950 dark:via-gray-900 dark:to-slate-900 text-gray-900 dark:text-gray-100">
@@ -618,7 +685,11 @@ function App() {
                     {reportes.map(r => {
                       const siguientes = TRANSICIONES[r.estado] ?? []
                       const auditOpen = abierto === r.id
-                      return (
+                      // Paginacion
+  const totalPaginas = Math.max(1, Math.ceil(reportes.length / PAGE_SIZE))
+  const reportesPagina = reportes.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
+
+  return (
                         <li
                           key={r.id}
                           className="rounded-xl ring-1 ring-gray-200 dark:ring-gray-700/60 bg-gray-50/50 dark:bg-gray-800/40 hover:ring-gray-300 dark:hover:ring-gray-600 transition-all duration-150"
