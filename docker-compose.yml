@@ -15,7 +15,7 @@ services:
       reportes:
         condition: service_healthy
       auditoria:
-        condition: service_started
+        condition: service_healthy
     networks:
       frontend_net:
         ipv4_address: 172.20.0.10
@@ -59,8 +59,6 @@ services:
     build: ./auditoria
     container_name: auditoria
     hostname: auditoria
-    # ports: # temporal para testing
-    #  - "8002:8002"
     expose:
       - "8002"
     environment:
@@ -69,6 +67,11 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       backend_net:
         ipv4_address: 172.21.0.12
@@ -120,7 +123,7 @@ networks:
         - subnet: 172.20.0.0/24
   backend_net:
     driver: bridge
-    internal: true          # comentado temporalmente para testing
+    internal: true
     ipam:
       config:
         - subnet: 172.21.0.0/24

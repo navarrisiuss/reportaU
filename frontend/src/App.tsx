@@ -25,6 +25,7 @@ type Reporte = {
 
 type Evento = {
   evento_id: string
+  operacion: string
   hash: string
   ip_origen: string
   nodo_origen: string

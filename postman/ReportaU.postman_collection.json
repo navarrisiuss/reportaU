@@ -1,0 +1,217 @@
+{
+  "info": {
+    "_postman_id": "b3f6c1a2-5d4e-4f8a-9c1b-7e2d3a4f5b60",
+    "name": "ReportaU",
+    "description": "Colección de pruebas para el sistema ReportaU (gateway en http://localhost:8080).\n\nVariables:\n- baseUrl: URL del gateway.\n- reporte_id: se llena automáticamente al ejecutar \"Crear reporte\".",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "reporte_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Sistema",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reportes",
+      "item": [
+        {
+          "name": "Crear reporte",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "if (cuerpo.id) {",
+                  "  pm.collectionVariables.set('reporte_id', cuerpo.id);",
+                  "  console.log('reporte_id guardado:', cuerpo.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoria\": \"INFRAESTRUCTURA\",\n  \"titulo\": \"Proyector roto en sala B-204\",\n  \"descripcion\": \"El proyector no enciende desde hace dos semanas.\",\n  \"ubicacion\": \"Edificio B, sala 204\",\n  \"anonimo\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reportes"]
+            }
+          }
+        },
+        {
+          "name": "Listar reportes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reportes"]
+            }
+          }
+        },
+        {
+          "name": "Listar reportes filtrados",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes?estado=RECIBIDO&categoria=INFRAESTRUCTURA",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reportes"],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "RECIBIDO"
+                },
+                {
+                  "key": "categoria",
+                  "value": "INFRAESTRUCTURA"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Estados",
+      "item": [
+        {
+          "name": "Cambiar estado (válido)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"EN_REVISION\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes/{{reporte_id}}/estado",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reportes", "{{reporte_id}}", "estado"]
+            }
+          }
+        },
+        {
+          "name": "Transición inválida (422)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"RECIBIDO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes/{{reporte_id}}/estado",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reportes", "{{reporte_id}}", "estado"]
+            }
+          }
+        },
+        {
+          "name": "ID inexistente (404)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"EN_REVISION\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes/00000000-0000-0000-0000-000000000000/estado",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reportes", "00000000-0000-0000-0000-000000000000", "estado"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auditoría",
+      "item": [
+        {
+          "name": "Ver auditoría del reporte",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reportes/{{reporte_id}}/auditoria",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reportes", "{{reporte_id}}", "auditoria"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

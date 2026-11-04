@@ -95,6 +95,20 @@ curl http://localhost:8080/api/reportes
 curl http://localhost:8080/api/reportes/<id>/auditoria
 ```
 
+**Cambiar el estado de un reporte** (transiciones válidas: `RECIBIDO → EN_REVISION`, `EN_REVISION → RESUELTO|RECHAZADO`):
+
+```bash
+curl -X PATCH http://localhost:8080/api/reportes/<id>/estado \
+  -H "Content-Type: application/json" \
+  -d '{"estado":"EN_REVISION"}'
+```
+
+Una transición inválida responde `422` y un ID inexistente `404` (el gateway propaga esos códigos, no los convierte en `503`).
+
+### Colección de Postman
+
+En `postman/ReportaU.postman_collection.json` hay una colección exportada con las mismas pruebas (health, crear/listar reportes, cambios de estado válidos e inválidos y auditoría). Impórtala en Postman y ejecuta **Crear reporte**: la variable `reporte_id` se completa sola para el resto de las peticiones.
+
 ### Verificar que el reporte quedó en ambas bases de datos
 
 ```bash
@@ -130,7 +144,9 @@ Variables de entorno configurables (`MONGO_URI=mongodb://mongo:27017`, `MONGO_DB
    "ip_origen":"172.20.0.1","nodo_origen":"gateway","recibido_en":"2026-10-23T02:02:16.960Z"}
   ```
   Calcula el SHA-256 del `payload`, guarda la traza en la colección `eventos_auditoria` y responde `201` con `{"evento_id":"...","hash":"sha256:..."}`.
-- `GET /eventos?reporte_id=<uuid>` → lista de trazas de ese reporte. La usa el frontend en "Ver auditoría"; los campos que muestra son `evento_id`, `hash`, `ip_origen`, `nodo_origen`, `nodo_auditor`, `registrado_en` y `duracion_ms`.
+- `GET /eventos?reporte_id=<uuid>` → lista de trazas de ese reporte. La usa el frontend en "Ver auditoría"; los campos que muestra son `evento_id`, `operacion`, `hash`, `ip_origen`, `nodo_origen`, `nodo_auditor`, `registrado_en` y `duracion_ms`.
+
+El gateway registra una traza `CREAR_REPORTE` al crear un reporte y una traza `CAMBIAR_ESTADO` en cada transición de estado exitosa.
 
 ## Contratos internos
 
@@ -138,14 +154,16 @@ Variables de entorno configurables (`MONGO_URI=mongodb://mongo:27017`, `MONGO_DB
 |---|---|---|
 | Cliente → gateway | `POST /api/reportes` | Crear un reporte (valida con JSON Schema/Ajv) |
 | Cliente → gateway | `GET /api/reportes` | Listar los últimos reportes |
+| Cliente → gateway | `PATCH /api/reportes/:id/estado` | Cambiar el estado de un reporte |
 | Cliente → gateway | `GET /api/reportes/:id/auditoria` | Trazas de auditoría de un reporte |
 | Cliente → gateway | `GET /health` | Estado del gateway y de los servicios internos |
 | gateway → reportes | `POST http://reportes:8001/reportes` | Insertar en PostgreSQL (estado `RECIBIDO`) |
 | gateway → reportes | `GET http://reportes:8001/reportes` | Listar reportes |
+| gateway → reportes | `PATCH http://reportes:8001/reportes/:id/estado` | Validar la transición y actualizar el estado |
 | gateway → auditoria | `POST http://auditoria:8002/eventos` | Guardar hash, IP, nodo y tiempos en MongoDB |
 | gateway → auditoria | `GET http://auditoria:8002/eventos?reporte_id=` | Consultar trazas |
 
-Si el servicio de auditoría falla, el reporte igual queda guardado y el gateway responde `201` con `"auditoria": "PENDIENTE"`. Si falla el servicio de reportes, responde `503`.
+Si el servicio de auditoría falla, el reporte igual queda guardado y el gateway responde `201` con `"auditoria": "PENDIENTE"` (en el `PATCH`, el cambio queda aplicado y la respuesta incluye `"auditoria": "PENDIENTE"`). Si falla el servicio de reportes, responde `503`; si responde con un error de negocio (`4xx`), el gateway propaga ese código.
 
 ## Estructura del repositorio
 
@@ -155,6 +173,7 @@ Si el servicio de auditoría falla, el reporte igual queda guardado y el gateway
 ├── gateway/             # Módulo A: TypeScript
 ├── reportes/            # Módulo B: Python
 ├── auditoria/           # Módulo C: Rust (en desarrollo)
+├── postman/             # Colección de Postman exportada
 └── frontend/            # React + Vite + nginx
 ```
 
