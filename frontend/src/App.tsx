@@ -27,6 +27,7 @@ type Reporte = {
 
 type Evento = {
   evento_id: string
+  operacion: string
   hash: string
   ip_origen: string
   nodo_origen: string
@@ -334,6 +335,8 @@ function App() {
                       {(eventos[r.id] ?? []).length === 0 && <p>Sin eventos de auditoría registrados.</p>}
                       {(eventos[r.id] ?? []).map((ev) => (
                         <dl key={ev.evento_id}>
+                          <dt>Operación</dt>
+                          <dd>{ev.operacion}</dd>
                           <dt>Hash</dt>
                           <dd className="mono">{ev.hash}</dd>
                           <dt>IP origen</dt>
