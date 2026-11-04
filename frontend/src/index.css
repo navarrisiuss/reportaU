@@ -1,47 +1,75 @@
+@import "tailwindcss";
+
+/* ── Variables ───────────────────────────────────────────────────────────── */
 :root {
-  --text: #5b6474;
-  --text-h: #0f172a;
-  --bg: #f4f6fa;
-  --surface: #ffffff;
-  --border: #dfe3ea;
-  --accent: #1d4ed8;
-  --accent-bg: rgba(29, 78, 216, 0.1);
-  --ok: #15803d;
-  --ok-bg: rgba(21, 128, 61, 0.12);
-  --err: #b91c1c;
-  --err-bg: rgba(185, 28, 28, 0.1);
+  --sans: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 16px/1.5 var(--sans);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
   color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9aa4b2;
-    --text-h: #f1f5f9;
-    --bg: #12141a;
-    --surface: #1a1d25;
-    --border: #2c303b;
-    --accent: #7aa2ff;
-    --accent-bg: rgba(122, 162, 255, 0.15);
-    --ok: #4ade80;
-    --ok-bg: rgba(74, 222, 128, 0.12);
-    --err: #f87171;
-    --err-bg: rgba(248, 113, 113, 0.12);
-  }
-}
-
-* {
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: var(--bg);
+  padding: 0;
+}
+
+/* ── Scrollbar (webkit) ──────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 999px;
+}
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: #374151;
+  }
+}
+
+/* ── Smooth focus rings ──────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ── Selection ───────────────────────────────────────────────────────────── */
+::selection {
+  background: #bfdbfe;
+  color: #1e3a8a;
+}
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background: #1e3a8a;
+    color: #bfdbfe;
+  }
+}
+
+/* ── Monospace ───────────────────────────────────────────────────────────── */
+code, kbd, pre, .font-mono {
+  font-family: var(--mono);
+}
+
+/* ── Transition base ─────────────────────────────────────────────────────── */
+button, input, select, textarea {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
